@@ -25,8 +25,50 @@ notify = true
 ```
 
 Schedules are `cron = "M H DOM MON DOW"` or `every = "30m"`. The daemon
-picks up config changes automatically. See `SPEC.md` for all options
-(workspace/tab behavior, pre/post hooks, catch-up, types).
+picks up config changes automatically. See `SPEC.md` for the full
+behavior spec.
+
+## Options
+
+### `[settings]` — file-wide defaults
+
+| key | default | description |
+|---|---|---|
+| `shell` | `$SHELL`, else `sh` | shell that runs command strings, pre and post hooks |
+| `workspace` | `"routines"` | default workspace label for pane routines |
+| `max_log_lines` | `1000` | max lines kept in the `runs.jsonl` run log |
+
+### `[[routine]]` — one block per routine
+
+Required: `name`, one schedule (`cron` or `every`), and one action
+(`command` or `action`).
+
+| key | default | description |
+|---|---|---|
+| `name` | — | unique routine name; also the tab label |
+| `description` | — | optional free text, shown by `list` |
+| `cron` | — | 5-field cron: `*`, lists `1,3,5`, ranges `9-18`, steps `*/15`, names `mon-fri`, `jan` |
+| `every` | — | interval sugar: `45s`, `15m`, `2h`, `1d`; exclusive with `cron` |
+| `type` | inferred | `pane` (command in a tab), `shell` (daemon-side, no tab), `plugin_action`; inferred from `command`/`action` |
+| `command` | — | shell string, run exactly as typed; or argv array for no-shell execution |
+| `action` | — | plugin action id to invoke (`type = "plugin_action"`) |
+| `cwd` | `~` | working directory for the command / tab |
+| `shell` | from `[settings]` | per-routine shell override |
+| `enabled` | `true` | `false` parks the routine without deleting it |
+| `workspace` | from `[settings]` | workspace label (pane routines only) |
+| `workspace_id` | — | target an exact workspace id; implies `require`; exclusive with `workspace` |
+| `workspace_mode` | `"reuse"` | `reuse` (find or create), `create` (new one per firing), `require` (fail if missing) |
+| `tab_mode` | `"reuse"` | `reuse` (one tab per routine) or `create` (new tab per firing) |
+| `focus` | `false` | `true` jumps to the tab when the routine fires |
+| `close_when_done` | `false` | appends `; exit` so the pane closes itself when the command finishes |
+| `pre` | — | daemon-side hook before everything; non-zero exit skips the firing |
+| `post` | — | daemon-side hook after the command exits; `shell`/`plugin_action` types only |
+| `notify` | `false` | Herdr notification when the routine fires, is skipped, or fails |
+| `catch_up` | `false` | if scheduled times were missed (daemon down, laptop asleep), fire once, late |
+
+Notes: missed runs are skipped by default (no anacron); cron matches local
+wall-clock time; `pane` routines can't take `post` (chain
+`command && post` instead) or be watched — fire-and-forget by design.
 
 ## Examples
 
