@@ -25,8 +25,11 @@ notify = true
 ```
 
 Schedules are `cron = "M H DOM MON DOW"` or `every = "30m"`. The daemon
-picks up config changes automatically. See `SPEC.md` for the full
-behavior spec.
+picks up config changes automatically. Requires Python 3.11+ (`tomllib`).
+
+Note: `shell` routines and `pre`/`post` hooks run synchronously in the
+scheduler tick, so a long-running one delays other routines — put slow
+jobs in a `pane` routine instead.
 
 ## Options
 

@@ -39,6 +39,10 @@ def state_dir() -> Path:
     # fallback mirrors the dir Herdr injects as HERDR_PLUGIN_STATE_DIR
     p = Path(d) if d else Path.home() / ".local" / "state" / "herdr" / "plugins" / PLUGIN_ID
     p.mkdir(parents=True, exist_ok=True)
+    try:
+        p.chmod(0o700)  # logs echo command lines; keep them user-only
+    except OSError:
+        pass
     return p
 
 

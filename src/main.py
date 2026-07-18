@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""herdr-routines: cron for commands inside Herdr. See SPEC.md.
+"""herdr-routines: cron for commands inside Herdr. See README.md.
 
 Usage: main.py <daemon|start|stop|status|validate|list|run <name>>
 """
 
 import sys
+
+if sys.version_info < (3, 11):  # tomllib
+    sys.exit(f"herdr-routines needs Python 3.11+ "
+             f"(found {sys.version_info.major}.{sys.version_info.minor})")
+
 from datetime import datetime
 
 import daemon

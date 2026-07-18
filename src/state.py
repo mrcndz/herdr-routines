@@ -20,8 +20,14 @@ def load_state() -> dict:
     return {"last_fire": {}, "tabs": {}, "last_error": {}}
 
 
+def _write_atomic(path, text: str) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+
+
 def save_state(state: dict) -> None:
-    (state_dir() / "state.json").write_text(json.dumps(state, indent=1))
+    _write_atomic(state_dir() / "state.json", json.dumps(state, indent=1))
 
 
 def update_state(mutate) -> None:
@@ -35,4 +41,4 @@ def append_run(settings: dict, entry: dict) -> None:
     lines = p.read_text().splitlines() if p.exists() else []
     lines.append(json.dumps(entry))
     lines = lines[-int(settings["max_log_lines"]):]
-    p.write_text("\n".join(lines) + "\n")
+    _write_atomic(p, "\n".join(lines) + "\n")

@@ -15,14 +15,26 @@ from state import load_state, log, update_state
 TICK_SECONDS = 15
 
 
+def _is_our_daemon(pid: int) -> bool:
+    """Guard against PID reuse: the process must actually be this daemon."""
+    try:
+        out = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=5)
+        return "main.py" in out.stdout and "daemon" in out.stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def daemon_pid():
     pidfile = state_dir() / "daemon.pid"
 
     if pidfile.exists():
         try:
             pid = int(pidfile.read_text().strip())
-            os.kill(pid, 0)
-            return pid
+            if pid > 1:  # never trust 0/-1: os.kill would hit the whole group
+                os.kill(pid, 0)
+                if _is_our_daemon(pid):
+                    return pid
         except (OSError, ValueError):
             pass
 
@@ -91,15 +103,32 @@ class Daemon:
             time.sleep(TICK_SECONDS)
 
 
+def _claim_pidfile(pidfile) -> bool:
+    """Atomically claim the pidfile (O_EXCL beats start/start races)."""
+    try:
+        fd = os.open(pidfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        if daemon_pid():
+            return False
+        pidfile.unlink(missing_ok=True)  # stale: dead pid or foreign process
+        try:
+            fd = os.open(pidfile, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            return False
+    with os.fdopen(fd, "w") as f:
+        f.write(str(os.getpid()))
+    return True
+
+
 def run() -> int:
     """The foreground daemon loop (the `daemon` subcommand)."""
+    os.umask(0o077)  # state files may echo command lines; keep them private
     pidfile = state_dir() / "daemon.pid"
 
-    if daemon_pid():
+    if not _claim_pidfile(pidfile):
         print("daemon already running")
         return 1
 
-    pidfile.write_text(str(os.getpid()))
     log(f"daemon started (pid {os.getpid()}, config {CONFIG_PATH})")
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
@@ -112,12 +141,22 @@ def run() -> int:
     return 0
 
 
+def _trim_log(path, max_bytes=1_000_000, keep_lines=1000) -> None:
+    try:
+        if path.exists() and path.stat().st_size > max_bytes:
+            lines = path.read_text(errors="replace").splitlines()[-keep_lines:]
+            path.write_text("\n".join(lines) + "\n")
+    except OSError:
+        pass
+
+
 def start() -> int:
     """Spawn the daemon detached, logging to the state dir."""
     if daemon_pid():
         print("daemon already running")
         return 0
 
+    _trim_log(state_dir() / "daemon.log")
     logf = open(state_dir() / "daemon.log", "a")
     subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py"), "daemon"],
                      stdout=logf, stderr=logf, start_new_session=True)
