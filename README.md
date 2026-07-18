@@ -31,6 +31,12 @@ Note: `shell` routines and `pre`/`post` hooks run synchronously in the
 scheduler tick, so a long-running one delays other routines — put slow
 jobs in a `pane` routine instead.
 
+Headless Linux servers: the `workspace.focused` autostart never fires
+without a client attached — run the daemon via a systemd user unit
+(`ExecStart=python3 <plugin-root>/src/main.py daemon`) instead. Ubuntu
+22.04 ships Python 3.10; install 3.11+ there. `notify = true` degrades to
+a logged failure when no notification backend exists.
+
 ## Options
 
 ### `[settings]` — file-wide defaults

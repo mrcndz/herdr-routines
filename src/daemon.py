@@ -17,6 +17,14 @@ TICK_SECONDS = 15
 
 def _is_our_daemon(pid: int) -> bool:
     """Guard against PID reuse: the process must actually be this daemon."""
+    cmdline = f"/proc/{pid}/cmdline"  # Linux: exact argv, no ps truncation
+    if os.path.exists(cmdline):
+        try:
+            with open(cmdline, "rb") as f:
+                text = f.read().replace(b"\0", b" ").decode(errors="replace")
+            return "main.py" in text and "daemon" in text
+        except OSError:
+            return False
     try:
         out = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
                              capture_output=True, text=True, timeout=5)
