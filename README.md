@@ -56,7 +56,7 @@ Required: `name`, one schedule (`cron` or `every`), and one action
 |---|---|---|
 | `name` | — | unique routine name; also the tab label |
 | `description` | — | optional free text, shown by `list` |
-| `cron` | — | 5-field cron: `*`, lists `1,3,5`, ranges `9-18`, steps `*/15`, names `mon-fri`, `jan` |
+| `cron` | — | 5-field cron: `*`, lists `1,3,5`, ranges `9-18`, steps `*/15`, names `mon-fri`, `jan`; standard Vixie day rule: when both day-of-month and day-of-week are restricted, either matches |
 | `every` | — | interval sugar: `45s`, `15m`, `2h`, `1d`; exclusive with `cron`; first fire is one interval after the daemon first sees the routine |
 | `type` | inferred | `pane` (command in a tab), `shell` (daemon-side, no tab), `plugin_action`; `action` infers `plugin_action`, `command` infers `pane` — `shell` must be stated |
 | `command` | — | shell string, run exactly as typed; or argv array for no-shell execution |

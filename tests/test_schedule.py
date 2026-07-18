@@ -97,13 +97,36 @@ class TestCronParsing(unittest.TestCase):
         c = Cron("0 0 29 2 *")
         self.assertIsNone(c.most_recent(dt("2027-03-01T00:00")))
 
-    def test_dom_and_dow_are_anded_not_ored(self):
-        # standard cron ORs dom/dow when both are restricted; our impl
-        # ANDs them instead, so "day 1 AND monday" needs both to align
+    def test_dom_and_dow_ored_when_both_restricted(self):
+        # standard (Vixie) cron: both day fields restricted → either matches
         c = Cron("0 0 1 * mon")
-        self.assertFalse(c.matches(dt("2026-07-01T00:00")))  # dom only, Wed
-        self.assertFalse(c.matches(dt("2026-07-06T00:00")))  # dow only, Mon
+        self.assertTrue(c.matches(dt("2026-07-01T00:00")))   # dom only, Wed the 1st
+        self.assertTrue(c.matches(dt("2026-07-06T00:00")))   # dow only, a Monday
         self.assertTrue(c.matches(dt("2026-06-01T00:00")))   # both: Mon the 1st
+        self.assertFalse(c.matches(dt("2026-07-02T00:00")))  # neither, Thu the 2nd
+
+    def test_dom_restricted_dow_star_still_ands(self):
+        c = Cron("0 0 13 * *")
+        self.assertTrue(c.matches(dt("2026-07-13T00:00")))
+        self.assertFalse(c.matches(dt("2026-07-14T00:00")))
+
+    def test_dow_restricted_dom_star_still_ands(self):
+        c = Cron("0 9 * * fri")
+        self.assertTrue(c.matches(dt("2026-07-17T09:00")))   # Friday
+        self.assertFalse(c.matches(dt("2026-07-18T09:00")))  # Saturday
+
+    def test_star_step_counts_as_unrestricted_for_or_rule(self):
+        # Vixie rule: */N still counts as "*" — no OR, both fields must match
+        c = Cron("0 0 */2 * mon")
+        self.assertTrue(c.matches(dt("2026-07-13T00:00")))   # Mon, day 13 ∈ {1,3,5...}
+        self.assertFalse(c.matches(dt("2026-07-06T00:00")))  # Mon, day 6 ∉ {1,3,5...}
+        self.assertFalse(c.matches(dt("2026-07-01T00:00")))  # day 1 ∈ set but Wed
+
+    def test_friday_the_13th_or_semantics(self):
+        c = Cron("0 9 13 * fri")
+        self.assertTrue(c.matches(dt("2026-07-13T09:00")))   # the 13th (a Monday)
+        self.assertTrue(c.matches(dt("2026-07-17T09:00")))   # a Friday (the 17th)
+        self.assertFalse(c.matches(dt("2026-07-14T09:00")))  # Tuesday the 14th
 
     def test_month_rollover_in_most_recent(self):
         c = Cron("0 0 1 * *")

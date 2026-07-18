@@ -46,11 +46,22 @@ class Cron:
         self.dom = _parse_field(fields[2], 1, 31, {})
         self.month = _parse_field(fields[3], 1, 12, MONTH_NAMES)
         self.dow = _parse_field(fields[4], 0, 7, DOW_NAMES)
+        # standard cron: when BOTH day fields are restricted, either matches;
+        # like Vixie cron, a field starting with `*` (incl. */N) counts as
+        # unrestricted for this rule
+        self.dom_restricted = not fields[2].strip().startswith("*")
+        self.dow_restricted = not fields[4].strip().startswith("*")
+
+    def _day_matches(self, dt: datetime) -> bool:
+        dom_ok = dt.day in self.dom
+        dow_ok = dt.isoweekday() % 7 in self.dow
+        if self.dom_restricted and self.dow_restricted:
+            return dom_ok or dow_ok
+        return dom_ok and dow_ok
 
     def matches(self, dt: datetime) -> bool:
         return (dt.minute in self.minute and dt.hour in self.hour
-                and dt.day in self.dom and dt.month in self.month
-                and dt.isoweekday() % 7 in self.dow)
+                and dt.month in self.month and self._day_matches(dt))
 
     def most_recent(self, now: datetime):
         """Most recent matching minute ≤ now, within the catch-up window."""
