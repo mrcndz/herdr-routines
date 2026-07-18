@@ -227,6 +227,184 @@ class TestLoadConfig(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "not found"):
             load_config(Path("/nonexistent/routines.toml"))
 
+    def test_empty_file(self):
+        settings, routines, warnings = load("")
+        self.assertEqual(routines, [])
+        self.assertEqual(warnings, [])
+        self.assertEqual(settings["max_log_lines"], 1000)
+
+    def test_settings_only_no_routines(self):
+        settings, routines, _ = load("""
+            [settings]
+            workspace = "custom"
+        """)
+        self.assertEqual(routines, [])
+        self.assertEqual(settings["workspace"], "custom")
+
+    def test_settings_wrong_type_not_coerced(self):
+        # max_log_lines isn't validated as int here; the bad value passes
+        # through load_config and would only blow up where it's consumed
+        # (int(settings["max_log_lines"]) in state.append_run)
+        settings, _, _ = load("""
+            [settings]
+            max_log_lines = "many"
+        """)
+        self.assertEqual(settings["max_log_lines"], "many")
+
+    def test_unknown_extra_key_accepted(self):
+        # unrecognized keys on a routine are silently accepted, not rejected
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = "date"
+            totally_unknown_key = "x"
+        """)
+        self.assertEqual(routines[0]["totally_unknown_key"], "x")
+
+    def test_unicode_emoji_routine_name(self):
+        _, routines, _ = load("""
+            [[routine]]
+            name = "🚀 deploy"
+            every = "1h"
+            command = "date"
+        """)
+        self.assertEqual(routines[0]["name"], "🚀 deploy")
+
+    def test_name_with_spaces(self):
+        _, routines, _ = load("""
+            [[routine]]
+            name = "my routine name"
+            every = "1h"
+            command = "date"
+        """)
+        self.assertEqual(routines[0]["name"], "my routine name")
+
+    def test_toml_syntax_error_raises_config_error(self):
+        with self.assertRaises(ConfigError):
+            load("[[routine]\nbroken =")
+
+    def test_argv_command_with_non_string_element_accepted(self):
+        # TOML types aren't validated here; a non-string argv element
+        # passes straight through and would only fail at subprocess.run
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = ["python3", 123]
+        """)
+        self.assertEqual(routines[0]["command"], ["python3", 123])
+
+    def test_boolean_key_given_as_string_not_coerced(self):
+        # notify expects a bool; a TOML string "true" stays a string and
+        # is falsy in `if not routine.get("notify")` (runner.notify)
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = "date"
+            notify = "true"
+        """)
+        self.assertEqual(routines[0]["notify"], "true")
+
+    def test_cwd_with_env_var_not_expanded_at_load(self):
+        # expansion happens later via os.path.expanduser at fire time;
+        # load_config stores the raw string
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = "date"
+            cwd = "$HOME/project"
+        """)
+        self.assertEqual(routines[0]["cwd"], "$HOME/project")
+
+    def test_default_cwd_is_tilde(self):
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = "date"
+        """)
+        self.assertEqual(routines[0]["cwd"], "~")
+
+    def test_bad_workspace_mode_reported(self):
+        with self.assertRaisesRegex(ConfigError, "bad workspace_mode"):
+            load("""
+                [[routine]]
+                name = "t"
+                every = "1h"
+                command = "date"
+                workspace_mode = "bogus"
+            """)
+
+    def test_bad_tab_mode_reported(self):
+        with self.assertRaisesRegex(ConfigError, "bad tab_mode"):
+            load("""
+                [[routine]]
+                name = "t"
+                every = "1h"
+                command = "date"
+                tab_mode = "bogus"
+            """)
+
+    def test_unknown_type_rejected(self):
+        with self.assertRaisesRegex(ConfigError, "unknown type"):
+            load("""
+                [[routine]]
+                name = "t"
+                type = "bogus"
+                every = "1h"
+                command = "date"
+            """)
+
+    def test_plugin_action_type_needs_action(self):
+        with self.assertRaisesRegex(ConfigError, "needs `action`"):
+            load("""
+                [[routine]]
+                name = "t"
+                type = "plugin_action"
+                every = "1h"
+            """)
+
+    def test_pane_keys_rejected_on_plugin_action(self):
+        with self.assertRaisesRegex(ConfigError, "not allowed on type plugin_action"):
+            load("""
+                [[routine]]
+                name = "t"
+                every = "1h"
+                action = "x.y"
+                focus = true
+            """)
+
+    def test_bad_every_reported(self):
+        with self.assertRaisesRegex(ConfigError, "bad interval"):
+            load("""
+                [[routine]]
+                name = "t"
+                every = "1w"
+                command = "date"
+            """)
+
+    def test_disabled_routine_still_loads(self):
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = "date"
+            enabled = false
+        """)
+        self.assertFalse(routines[0]["enabled"])
+
+    def test_enabled_defaults_true(self):
+        _, routines, _ = load("""
+            [[routine]]
+            name = "t"
+            every = "1h"
+            command = "date"
+        """)
+        self.assertTrue(routines[0]["enabled"])
+
 
 if __name__ == "__main__":
     unittest.main()

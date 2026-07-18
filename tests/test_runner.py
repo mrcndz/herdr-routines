@@ -108,6 +108,64 @@ class TestErrorPath(RunnerBase):
                          "workspace w3 not found")
 
 
+class TestPreHookArgvForm(RunnerBase):
+    @patch("runner.notify")
+    @patch("runner.resolve_tab", return_value=("p1", None))
+    @patch("runner.resolve_workspace", return_value="w1")
+    @patch("runner.herdr")
+    def test_pre_hook_argv_array_runs_without_shell(self, herdr, *_):
+        marker = Path(self.tmp.name) / "pre-ran"
+        r = routine(command="echo hi", pre=["touch", str(marker)])
+        runner.fire(r, SETTINGS, self.now, False)
+        self.assertTrue(marker.exists())
+        herdr.assert_called_once()  # command still fired
+
+
+class TestNotifyFalse(RunnerBase):
+    @patch("runner.herdr")
+    def test_notify_false_never_calls_herdr_notification(self, herdr):
+        r = routine(_type="shell", command="true", notify=False)
+        runner.fire(r, SETTINGS, self.now, False)
+        herdr.assert_not_called()
+
+    @patch("runner.herdr")
+    def test_notify_unset_defaults_to_no_notification(self, herdr):
+        r = routine(_type="shell", command="true")
+        runner.fire(r, SETTINGS, self.now, False)
+        herdr.assert_not_called()
+
+
+class TestCwdExpanduser(RunnerBase):
+    def test_tilde_cwd_expanded(self):
+        r = routine(_type="shell", command="pwd", cwd="~")
+        runner.fire(r, SETTINGS, self.now, False)
+        self.assertEqual(self.runs()[-1]["outcome"], "finished")
+
+
+class TestCommandTimeout(RunnerBase):
+    def test_timeout_recorded_as_error_outcome(self):
+        r = routine(_type="shell", command="sleep 5")
+        with patch("runner._shell_run", side_effect=__import__("subprocess").TimeoutExpired("sleep", 0.01)):
+            runner.fire(r, SETTINGS, self.now, False)
+        self.assertEqual(self.runs()[-1]["outcome"], "error")
+
+
+class TestOutcomeStrings(RunnerBase):
+    @patch("runner.resolve_tab", return_value=("p1", None))
+    @patch("runner.resolve_workspace", return_value="w1")
+    @patch("runner.herdr")
+    def test_pane_started_outcome_exact(self, *_):
+        r = routine(command="echo hi")
+        runner.fire(r, SETTINGS, self.now, False)
+        self.assertEqual(self.runs()[-1]["outcome"], "started")
+
+    @patch("runner.herdr")
+    def test_plugin_action_finished_outcome_exact(self, herdr):
+        r = routine(_type="plugin_action", action="a.b")
+        runner.fire(r, SETTINGS, self.now, False)
+        self.assertEqual(self.runs()[-1]["outcome"], "finished")
+
+
 class TestRunLog(RunnerBase):
     @patch("runner.resolve_tab", return_value=("p1", None))
     @patch("runner.resolve_workspace", return_value="w1")

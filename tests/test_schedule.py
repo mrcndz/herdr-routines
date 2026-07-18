@@ -87,6 +87,64 @@ class TestCronParsing(unittest.TestCase):
         self.assertEqual(c.most_recent(dt("2026-07-18T08:59")),
                          dt("2026-07-17T09:00"))
 
+    def test_leap_day_matches(self):
+        c = Cron("0 0 29 2 *")
+        self.assertTrue(c.matches(dt("2028-02-29T00:00")))
+
+    def test_leap_day_most_recent_rolls_back_to_prior_leap_year(self):
+        # catch-up window is only 7 days, so a Feb-29-only cron checked
+        # in a non-leap year finds nothing within the window
+        c = Cron("0 0 29 2 *")
+        self.assertIsNone(c.most_recent(dt("2027-03-01T00:00")))
+
+    def test_dom_and_dow_are_anded_not_ored(self):
+        # standard cron ORs dom/dow when both are restricted; our impl
+        # ANDs them instead, so "day 1 AND monday" needs both to align
+        c = Cron("0 0 1 * mon")
+        self.assertFalse(c.matches(dt("2026-07-01T00:00")))  # dom only, Wed
+        self.assertFalse(c.matches(dt("2026-07-06T00:00")))  # dow only, Mon
+        self.assertTrue(c.matches(dt("2026-06-01T00:00")))   # both: Mon the 1st
+
+    def test_month_rollover_in_most_recent(self):
+        c = Cron("0 0 1 * *")
+        self.assertEqual(c.most_recent(dt("2026-08-03T00:00")),
+                         dt("2026-08-01T00:00"))
+
+    def test_step_of_one_is_equivalent_to_wildcard(self):
+        c = Cron("*/1 * * * *")
+        for m in (0, 1, 30, 59):
+            self.assertTrue(c.matches(dt(f"2026-07-20T10:{m:02d}")))
+
+    def test_single_value_range(self):
+        c = Cron("0 0 5-5 * *")
+        self.assertTrue(c.matches(dt("2026-07-05T00:00")))
+        self.assertFalse(c.matches(dt("2026-07-06T00:00")))
+
+    def test_mixed_names_and_numbers_in_dow_list(self):
+        c = Cron("0 9 * * mon,3")
+        self.assertTrue(c.matches(dt("2026-07-20T09:00")))  # Monday
+        self.assertTrue(c.matches(dt("2026-07-22T09:00")))  # Wednesday (3)
+
+    def test_whitespace_tolerance(self):
+        c = Cron("  0   9  *  *  * ")
+        self.assertTrue(c.matches(dt("2026-07-20T09:00")))
+
+    def test_field_boundary_values(self):
+        c = Cron("59 23 31 12 *")
+        self.assertTrue(c.matches(dt("2026-12-31T23:59")))
+        c2 = Cron("0 0 1 1 *")
+        self.assertTrue(c2.matches(dt("2026-01-01T00:00")))
+
+    def test_dow_out_of_range_rejected(self):
+        with self.assertRaises(ValueError):
+            Cron("* * * * 8")
+
+    def test_dom_out_of_range_rejected(self):
+        with self.assertRaises(ValueError):
+            Cron("* * 32 * *")
+        with self.assertRaises(ValueError):
+            Cron("* * 0 * *")
+
 
 class TestParseEvery(unittest.TestCase):
     def test_units(self):
@@ -99,6 +157,24 @@ class TestParseEvery(unittest.TestCase):
         for text in ("", "10", "m", "1w", "1.5h", "-1m", "0s", "0m"):
             with self.assertRaises(ValueError, msg=text):
                 parse_every(text)
+
+    def test_large_value(self):
+        self.assertEqual(parse_every("90m"), 5400)
+
+    def test_leading_zeros(self):
+        self.assertEqual(parse_every("0001m"), 60)
+
+    def test_huge_value(self):
+        self.assertEqual(parse_every("999999d"), 999999 * 86400)
+
+    def test_unicode_digits_accepted(self):
+        # \d and int() both accept unicode digits (e.g. full-width "1"),
+        # so this is not rejected the way ascii-only validation would expect
+        self.assertEqual(parse_every("１m"), 60)
+
+    def test_whitespace_tolerated(self):
+        self.assertEqual(parse_every("  15m  "), 900)
+        self.assertEqual(parse_every("15 m"), 900)
 
 
 def routine(**kw):
@@ -156,6 +232,37 @@ class TestDue(unittest.TestCase):
     def test_no_catch_up_skips_missed(self):
         r = routine(cron="0 9 * * *")
         self.assertIsNone(due(r, "2026-07-17T09:00:00", dt("2026-07-18T13:37:00")))
+
+    def test_catch_up_window_boundary_exactly_7_days(self):
+        # most_recent scans CATCH_UP_WINDOW_MIN (7*24*60) minutes back,
+        # inclusive of the last minute in that range; the farthest a match
+        # can be found is CATCH_UP_WINDOW_MIN - 1 minutes before now
+        from datetime import timedelta
+        from schedule import CATCH_UP_WINDOW_MIN
+        now = dt("2026-07-18T00:00:00")
+        just_in = now - timedelta(minutes=CATCH_UP_WINDOW_MIN - 1)
+        just_out = now - timedelta(minutes=CATCH_UP_WINDOW_MIN)
+
+        c_in = Cron(f"{just_in.minute} {just_in.hour} {just_in.day} {just_in.month} *")
+        self.assertEqual(c_in.most_recent(now), just_in)
+
+        c_out = Cron(f"{just_out.minute} {just_out.hour} {just_out.day} {just_out.month} *")
+        self.assertIsNone(c_out.most_recent(now))
+
+    def test_catch_up_beyond_window_finds_nothing(self):
+        r = routine(cron="0 0 1 1 *", catch_up=True)  # once a year
+        now = dt("2026-07-18T00:05:00")
+        self.assertIsNone(due(r, "2020-01-01T00:00:00", now))
+
+    def test_every_exact_boundary_fires(self):
+        r = routine(every="30m")
+        hit = due(r, "2026-07-18T09:00:00", dt("2026-07-18T09:30:00"))
+        self.assertIsNotNone(hit)
+        self.assertFalse(hit[1])
+
+    def test_every_one_second_before_boundary_does_not_fire(self):
+        r = routine(every="30m")
+        self.assertIsNone(due(r, "2026-07-18T09:00:00", dt("2026-07-18T09:29:59")))
 
 
 if __name__ == "__main__":
