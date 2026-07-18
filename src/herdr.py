@@ -62,7 +62,13 @@ def resolve_tab(routine: dict, ws_id: str):
             try:
                 pane = herdr("pane", "get", known["pane_id"]).get("pane")
                 if pane and pane["workspace_id"] == ws_id:
-                    return known["pane_id"], pane
+                    if not pane.get("agent"):
+                        return known["pane_id"], pane
+                    if pane.get("agent_status") == "working":
+                        return known["pane_id"], pane
+                    # finished agent occupies the pane: typing a command
+                    # would go into its prompt box — recreate the tab
+                    herdr("tab", "close", known["tab_id"])
             except RuntimeError:
                 pass
         label = name
