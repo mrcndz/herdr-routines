@@ -8,9 +8,12 @@ pane, natively detected and tracked by Herdr.
 
 ```sh
 herdr plugin install mrcndz/herdr-routines
-herdr plugin config-dir herdr-routines   # put routines.toml there
+$EDITOR "$(herdr plugin config-dir herdr-routines)/routines.toml"   # write your routines
+herdr plugin action invoke herdr-routines.validate
 herdr plugin action invoke herdr-routines.start
 ```
+
+Fish: `$EDITOR (herdr plugin config-dir herdr-routines)/routines.toml`.
 
 ## Configure
 
