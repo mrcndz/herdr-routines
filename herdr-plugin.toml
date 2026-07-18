@@ -1,0 +1,30 @@
+id = "herdr-routines"
+name = "Herdr Routines"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "start"
+title = "Start the routines daemon"
+command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" start"]
+
+[[actions]]
+id = "stop"
+title = "Stop the routines daemon"
+command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" stop"]
+
+[[actions]]
+id = "status"
+title = "Show daemon and routines status"
+command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" status"]
+
+[[actions]]
+id = "validate"
+title = "Validate routines.toml"
+command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" validate"]
+
+[[actions]]
+id = "list"
+title = "List configured routines"
+command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" list"]

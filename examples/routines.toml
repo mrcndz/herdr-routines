@@ -1,0 +1,21 @@
+# Example routines.toml — copy to your plugin config dir:
+#   herdr plugin config-dir herdr-routines
+
+[settings]
+shell = "fish"
+workspace = "routines"
+
+[[routine]]
+name = "morning-repo-review"
+description = "summarize PRs needing attention"
+cron = "0 9 * * mon-fri"
+cwd = "~/Workspace/Repos/homelab-k3s"
+command = 'claude "Review open PRs and summarize what needs my attention."'
+notify = true
+catch_up = true
+
+[[routine]]
+name = "tick"
+type = "shell"
+every = "1h"
+command = "date >> ~/ticks.log"
