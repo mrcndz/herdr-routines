@@ -43,7 +43,7 @@ a logged failure when no notification backend exists.
 
 | key | default | description |
 |---|---|---|
-| `shell` | `$SHELL`, else `sh` | shell that runs command strings, pre and post hooks |
+| `shell` | `$SHELL`, else `sh` | shell for `shell`-type commands and pre/post hooks (`pane` commands run in the pane's own shell) |
 | `workspace` | `"routines"` | default workspace label for pane routines |
 | `max_log_lines` | `1000` | max lines kept in the `runs.jsonl` run log |
 
@@ -57,8 +57,8 @@ Required: `name`, one schedule (`cron` or `every`), and one action
 | `name` | — | unique routine name; also the tab label |
 | `description` | — | optional free text, shown by `list` |
 | `cron` | — | 5-field cron: `*`, lists `1,3,5`, ranges `9-18`, steps `*/15`, names `mon-fri`, `jan` |
-| `every` | — | interval sugar: `45s`, `15m`, `2h`, `1d`; exclusive with `cron` |
-| `type` | inferred | `pane` (command in a tab), `shell` (daemon-side, no tab), `plugin_action`; inferred from `command`/`action` |
+| `every` | — | interval sugar: `45s`, `15m`, `2h`, `1d`; exclusive with `cron`; first fire is one interval after the daemon first sees the routine |
+| `type` | inferred | `pane` (command in a tab), `shell` (daemon-side, no tab), `plugin_action`; `action` infers `plugin_action`, `command` infers `pane` — `shell` must be stated |
 | `command` | — | shell string, run exactly as typed; or argv array for no-shell execution |
 | `action` | — | plugin action id to invoke (`type = "plugin_action"`) |
 | `cwd` | `~` | working directory for the command / tab |
@@ -72,12 +72,20 @@ Required: `name`, one schedule (`cron` or `every`), and one action
 | `close_when_done` | `false` | appends `; exit` so the pane closes itself when the command finishes |
 | `pre` | — | daemon-side hook before everything; non-zero exit skips the firing |
 | `post` | — | daemon-side hook after the command exits; `shell`/`plugin_action` types only |
-| `notify` | `false` | Herdr notification when the routine fires, is skipped, or fails |
-| `catch_up` | `false` | if scheduled times were missed (daemon down, laptop asleep), fire once, late |
+| `notify` | `false` | Herdr notification when the routine fires, is pre-guard-skipped, or errors (not on overlap-skips) |
+| `catch_up` | `false` | if scheduled times were missed (daemon down, laptop asleep), fire once, late; looks back at most 7 days |
 
 Notes: missed runs are skipped by default (no anacron); cron matches local
-wall-clock time; `pane` routines can't take `post` (chain
+wall-clock time; the scheduler ticks every 15s, so firings can lag up to
+~15s past the scheduled minute; `pane` routines can't take `post` (chain
 `command && post` instead) or be watched — fire-and-forget by design.
+
+Tab reuse details (defaults): if the previous run's agent is still
+`working` when a routine fires again, the firing is skipped silently
+(logged as `overlap-skipped`); if the previous agent has finished, its tab
+is closed and a fresh one is created so the new run starts clean. Invalid
+config edits while the daemon runs are logged and the last good config
+stays active.
 
 ## Examples
 
