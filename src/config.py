@@ -36,7 +36,8 @@ def config_dir() -> Path:
 
 def state_dir() -> Path:
     d = os.environ.get("HERDR_PLUGIN_STATE_DIR")
-    p = Path(d) if d else Path.home() / ".local" / "state" / PLUGIN_ID
+    # fallback mirrors the dir Herdr injects as HERDR_PLUGIN_STATE_DIR
+    p = Path(d) if d else Path.home() / ".local" / "state" / "herdr" / "plugins" / PLUGIN_ID
     p.mkdir(parents=True, exist_ok=True)
     return p
 

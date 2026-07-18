@@ -28,3 +28,9 @@ command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" validate
 id = "list"
 title = "List configured routines"
 command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" list"]
+
+# Lazy autostart: `start` is idempotent, so the first workspace focus
+# after the server comes up brings the daemon with it.
+[[events]]
+on = "workspace.focused"
+command = ["/bin/sh", "-c", "python3 \"$HERDR_PLUGIN_ROOT/src/main.py\" start"]
