@@ -137,10 +137,67 @@ action = "example.layout.apply"
 
 ## Actions
 
-`start` · `stop` · `status` · `validate` · `list` — via
-`herdr plugin action invoke herdr-routines.<action>`.
+Everything is exposed as plugin actions, invocable from the CLI or
+bindable to keys:
 
-Run a routine now: `python3 src/main.py run <name>`.
+```sh
+herdr plugin action invoke herdr-routines.<action>
+```
+
+| action | what it does |
+|---|---|
+| `start` | start the scheduler daemon (detached; idempotent — safe to call again). Also fired automatically on `workspace.focused`, so the daemon comes up on its own once you focus any workspace |
+| `stop` | stop the daemon (SIGTERM via pidfile) |
+| `status` | daemon state, and per routine: schedule, last fire, disabled flag, last failure reason |
+| `validate` | check `routines.toml`; prints every error with the routine name, or `0 errors, N routine(s) loaded` |
+| `list` | one line per routine: name, type, schedule, description |
+
+Example session:
+
+```sh
+$ herdr plugin action invoke herdr-routines.validate
+0 errors, 3 routine(s) loaded
+
+$ herdr plugin action invoke herdr-routines.status
+daemon: running (pid 30370)
+  morning-repo-review      [0 9 * * mon-fri]  last: 2026-07-18T09:00:00
+  inbox-triage             [*/15 9-18 * * mon-fri]  last: 2026-07-18T17:45:00
+  backup                   [0 3 * * *]  last: never  (disabled)
+```
+
+### Running a routine on demand
+
+Herdr actions can't take arguments, so `run <name>` goes through the
+script directly:
+
+```sh
+python3 <plugin-root>/src/main.py run morning-repo-review
+```
+
+Bind it to a key in Herdr's `config.toml`:
+
+```toml
+[[keys.command]]
+key = "ctrl+r"
+type = "shell"
+command = "python3 <plugin-root>/src/main.py run morning-repo-review"
+description = "run morning review now"
+```
+
+Or wrap it as a fish command:
+
+```fish
+function herdr-routines
+    python3 <plugin-root>/src/main.py $argv
+end
+funcsave herdr-routines
+```
+
+Then: `herdr-routines run morning-repo-review`, `herdr-routines status`.
+
+State and logs live in the plugin state dir
+(`~/.local/state/herdr/plugins/herdr-routines/`): `daemon.log`,
+`runs.jsonl` (one JSON line per firing), `state.json`, `daemon.pid`.
 
 ## Development
 
