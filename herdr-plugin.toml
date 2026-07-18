@@ -1,6 +1,7 @@
 id = "herdr-routines"
 name = "Herdr Routines"
 version = "0.1.0"
+description = "Run commands and agents on cron schedules — each firing opens a tab in a workspace, runs your command, and lets Herdr track the agent"
 min_herdr_version = "0.7.0"
 platforms = ["macos", "linux"]
 

@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# local-only docs
+PLAN.md
+SPEC.md
