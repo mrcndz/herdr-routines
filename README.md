@@ -8,12 +8,18 @@ pane, natively detected and tracked by Herdr.
 
 ```sh
 herdr plugin install mrcndz/herdr-routines
-$EDITOR "$(herdr plugin config-dir herdr-routines)/routines.toml"   # write your routines
+
+cat > "$(herdr plugin config-dir herdr-routines)/routines.toml" <<'EOF'
+[[routine]]
+name = "morning-repo-review"
+cron = "0 9 * * mon-fri"
+cwd = "~/Workspace/Repos/my-project"
+command = 'claude "Review open PRs and summarize what needs my attention."'
+EOF
+
 herdr plugin action invoke herdr-routines.validate
 herdr plugin action invoke herdr-routines.start
 ```
-
-Fish: `$EDITOR (herdr plugin config-dir herdr-routines)/routines.toml`.
 
 ## Configure
 
